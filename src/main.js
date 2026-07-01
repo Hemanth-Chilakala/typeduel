@@ -312,14 +312,32 @@ function showWaiting() {
   stage.appendChild(ov);
 }
 
+// Returns "win" | "lose" | "draw" from this peer's perspective.
+// Uses the same rules on both machines, so results always agree.
+function decideOutcome(you, foe) {
+  const yt = parseFloat(you.time);
+  const ft = parseFloat(foe.time);
+  const yTime = isNaN(yt) ? Infinity : yt;
+  const fTime = isNaN(ft) ? Infinity : ft;
+  if (yTime !== fTime) return yTime < fTime ? "win" : "lose";
+  // Tie on time -> higher WPM wins.
+  if (you.wpm !== foe.wpm) return you.wpm > foe.wpm ? "win" : "lose";
+  // Still tied -> higher accuracy wins.
+  if (you.acc !== foe.acc) return you.acc > foe.acc ? "win" : "lose";
+  return "draw";
+}
+
 function showResult() {
   if (state.race) state.race.destroy();
   const you = state.you || { wpm: 0, acc: 100, time: "0.0" };
   const foe = state.foe || { wpm: 0, acc: 100, time: "0.0" };
-  const youWon =
-    parseFloat(you.time) <= (isNaN(parseFloat(foe.time)) ? Infinity : parseFloat(foe.time));
 
-  render(resultScreen({ youWon, solo: state.solo, you, foe }));
+  // Decide the outcome symmetrically so both peers agree.
+  // Lower time wins; on a tie fall back to higher WPM, then higher accuracy.
+  // (Time is reported at 0.1s precision, so ties are common and must be broken.)
+  const outcome = state.solo ? "solo" : decideOutcome(you, foe);
+
+  render(resultScreen({ outcome, solo: state.solo, you, foe }));
   el("homeBtn").onclick = goHome;
   const rematch = el("rematchBtn");
   rematch.onclick = () => {

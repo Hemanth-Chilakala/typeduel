@@ -164,10 +164,24 @@ export function raceScreen({ text, solo }) {
   </div>`;
 }
 
-export function resultScreen({ youWon, solo, you, foe }) {
-  const heroTitle = solo ? "Warm-up complete" : youWon ? "You Win" : "You Lose";
-  const heroClass = solo ? "" : youWon ? "win" : "lose";
-  const heroIcon = solo ? icon.target : youWon ? icon.trophy : icon.flag;
+export function resultScreen({ outcome, solo, you, foe }) {
+  // outcome: "solo" | "win" | "lose" | "draw"
+  const titleMap = {
+    solo: "Warm-up complete",
+    win: "You Win",
+    lose: "You Lose",
+    draw: "It's a Draw",
+  };
+  const classMap = { solo: "", win: "win", lose: "lose", draw: "draw" };
+  const iconMap = {
+    solo: icon.target,
+    win: icon.trophy,
+    lose: icon.flag,
+    draw: icon.target,
+  };
+  const heroTitle = titleMap[outcome];
+  const heroClass = classMap[outcome];
+  const heroIcon = iconMap[outcome];
 
   const foeCard = solo
     ? ""

@@ -640,6 +640,15 @@ body {
 .result-hero h2.lose {
   color: var(--text-dim);
 }
+.result-hero h2.draw {
+  background: linear-gradient(90deg, var(--accent-2), var(--accent-3));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.result-hero .crown.draw svg {
+  color: var(--accent-2);
+}
 .result-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
