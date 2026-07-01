@@ -1,0 +1,7 @@
+node_modules
+dist
+.DS_Store
+*.log
+
+# Personal internal notes — not part of the published project
+UPLOAD_TO_GITHUB_PLAYBOOK.md
