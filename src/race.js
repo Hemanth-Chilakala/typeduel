@@ -9,9 +9,29 @@ export function createRace({ text, wordsEl, hiddenInput, onProgress, onFinish })
   let raf = null;
   let finished = false;
 
+  let firstLineTop = null;
+  let lineHeight = 0;
+
   function setCurrent() {
     chars.forEach((c) => c.classList.remove("current"));
-    if (chars[idx]) chars[idx].classList.add("current");
+    const cur = chars[idx];
+    if (cur) cur.classList.add("current");
+    scrollToCurrent(cur);
+  }
+
+  // Keep the active line visible by translating the words track upward.
+  // Once the caret passes the first line, we scroll so the current line sits
+  // on the top row of the 3-line window (mirrors MonkeyType's behaviour).
+  function scrollToCurrent(cur) {
+    if (!cur) return;
+    if (firstLineTop === null) {
+      firstLineTop = cur.offsetTop;
+      const lh = parseFloat(getComputedStyle(wordsEl).lineHeight);
+      lineHeight = lh && !isNaN(lh) ? lh : cur.offsetHeight || 48;
+    }
+    const line = Math.round((cur.offsetTop - firstLineTop) / lineHeight);
+    const shift = Math.max(0, line - 1) * lineHeight; // keep one line of context above
+    wordsEl.style.transform = `translateY(${-shift}px)`;
   }
 
   function metrics() {

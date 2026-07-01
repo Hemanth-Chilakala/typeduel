@@ -154,7 +154,9 @@ export function raceScreen({ text, solo }) {
         <div class="stat"><div class="val" id="accVal">100</div><div class="lbl">accuracy %</div></div>
         <div class="stat"><div class="val" id="timeVal">0.0</div><div class="lbl">seconds</div></div>
       </div>
-      <div class="words" id="words">${renderText(text)}</div>
+      <div class="words-viewport">
+        <div class="words" id="words">${renderText(text)}</div>
+      </div>
       <input class="hidden-input" id="hiddenInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
       <div class="countdown" id="countdown"><div class="num">3</div></div>
     </div>

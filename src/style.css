@@ -516,6 +516,12 @@ body {
   margin-top: 6px;
 }
 
+.words-viewport {
+  /* Fixed 3-line window; the inner track scrolls up as you type. */
+  height: calc(26px * 1.85 * 3);
+  overflow: hidden;
+  position: relative;
+}
 .words {
   font-family: var(--mono);
   font-size: 26px;
@@ -527,8 +533,8 @@ body {
   flex-wrap: wrap;
   align-content: flex-start;
   gap: 0;
-  max-height: 200px;
-  overflow: hidden;
+  transition: transform 0.15s ease-out;
+  will-change: transform;
 }
 .words .word {
   display: inline-flex;
@@ -760,6 +766,9 @@ svg {
   }
   .words {
     font-size: 21px;
+  }
+  .words-viewport {
+    height: calc(21px * 1.85 * 3);
   }
   .brand h1 {
     font-size: 24px;
