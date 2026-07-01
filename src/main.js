@@ -141,12 +141,20 @@ function wireNetHandlers() {
         break;
       case "start":
         // Guest receives the shared seed and begins.
+        resetRoundState();
         state.seed = msg.seed;
         state.text = generate(msg.seed, msg.count);
         launchRace({ solo: false });
         break;
       case "progress":
         updateFoe(msg.progress, msg.wpm);
+        // Safety net: if the explicit finish message is ever lost, a progress
+        // report of 100% still lets us know the opponent has completed.
+        if (msg.progress >= 1 && !state.foeDone) {
+          state.foe = state.foe || { wpm: msg.wpm, acc: 100, time: "—" };
+          state.foeDone = true;
+          maybeShowResult();
+        }
         break;
       case "finish":
         state.foe = { wpm: msg.wpm, acc: msg.acc, time: msg.time };
@@ -254,6 +262,9 @@ function beginTyping() {
       state.you = { wpm: m.wpm, acc: m.acc, time: m.time };
       state.youDone = true;
       if (!state.solo && state.net) {
+        // Send a guaranteed final 100% progress (so the opponent's safety net
+        // fires even if the finish packet is delayed), then the finish payload.
+        state.net.send({ type: "progress", progress: 1, wpm: m.wpm });
         state.net.send({ type: "finish", wpm: m.wpm, acc: m.acc, time: m.time });
       }
       maybeShowResult();
@@ -275,7 +286,30 @@ function maybeShowResult() {
     if (state.youDone) showResult();
     return;
   }
-  if (state.youDone && state.foeDone) showResult();
+  if (state.youDone && state.foeDone) {
+    showResult();
+  } else if (state.youDone) {
+    // You're done but the opponent is still typing — show clear feedback
+    // instead of leaving the typing screen looking frozen.
+    showWaiting();
+  }
+}
+
+// Overlay shown after you finish while the opponent is still racing.
+function showWaiting() {
+  if (state.race) state.race.destroy();
+  const stage = document.querySelector(".type-stage");
+  if (!stage) return;
+  if (document.getElementById("waitOverlay")) return;
+  const ov = document.createElement("div");
+  ov.className = "countdown";
+  ov.id = "waitOverlay";
+  ov.innerHTML = `
+    <div style="text-align:center">
+      <div style="font-size:44px;font-weight:700">Done!</div>
+      <div class="dots-wait" style="margin-top:10px;color:var(--text-dim)">Waiting for opponent</div>
+    </div>`;
+  stage.appendChild(ov);
 }
 
 function showResult() {
