@@ -112,13 +112,25 @@ no payment details are required anywhere.
 - The GitHub Pages deployment requires the one-time Settings step above and has not been
   exercised in CI as part of this README.
 
+## Network requirements
+
+Multiplayer uses a direct browser-to-browser (WebRTC) connection with only free STUN
+signaling and no TURN relay. As a result:
+
+- It works reliably on ordinary home Wi-Fi and most mobile-data networks.
+- It may fail on restrictive networks such as college, campus, corporate, or public Wi-Fi,
+  where firewalls or strict/symmetric NAT block direct peer connections. On these networks
+  the code will connect but the two players may never link up.
+
+If a race won't connect, have both players switch to a normal home network or mobile hotspot.
+Adding a free TURN relay would remove this limitation but is intentionally left out to keep
+the project zero-cost with no external accounts.
+
 ## Known limitations
 
 - Multiplayer relies on the free public PeerJS broker for the handshake, which is
   best-effort and can be rate-limited. If needed, you can self-host the small `peerjs-server`
   for free, or fall back to a manual copy-paste connection flow.
-- Some strict or symmetric NATs may block a direct peer-to-peer connection. A TURN relay
-  would resolve this but is out of scope for a zero-cost project.
 
 ## Privacy
 
