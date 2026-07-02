@@ -21,6 +21,8 @@ There is no server holding the game state. The two browsers talk directly to eac
 ## Features
 
 - Head-to-head multiplayer with a shareable room code.
+- Multiple race modes the host can pick and sync to the guest: classic passage race, 30-second sprint, sudden-death accuracy, and falling-words survival.
+- Winner decided by net words-per-minute (correct characters only), so racing ahead with wrong keystrokes cannot beat an accurate finish.
 - Solo warm-up mode for offline practice.
 - Live opponent progress, WPM, and accuracy.
 - Deterministic word generation so both players always get identical text.
