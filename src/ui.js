@@ -4,6 +4,15 @@
 export const el = (id) => document.getElementById(id);
 export const app = () => document.getElementById("app");
 
+// Multiplayer game modes. `classic` is the original race; the rest are new.
+export const MODES = {
+  classic: { label: "Classic", desc: "First to finish the passage." },
+  sprint: { label: "Sprint 30s", desc: "Most correct words in 30 seconds." },
+  accuracy: { label: "Accuracy", desc: "One mistake ends your run." },
+  falling: { label: "Falling Words", desc: "Clear words before they drop." },
+};
+export const MODE_ORDER = ["classic", "sprint", "accuracy", "falling"];
+
 // ---- inline SVG icons (no emojis) ----
 const icon = {
   logo: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>`,
@@ -30,6 +39,10 @@ export function homeScreen() {
   <div class="screen">
     ${brand()}
     <p class="tagline">Share a code. Race a friend. Fastest fingers win.</p>
+    <div class="net-note">
+      <span>Peer-to-peer — may not connect on strict or corporate networks.</span>
+      <button class="net-info" id="netInfoBtn" title="Why?" aria-label="Network info">?</button>
+    </div>
     <div class="home-cards">
       <div class="card glass" id="createCard">
         <div class="ci">${icon.create}</div>
@@ -65,7 +78,22 @@ export function joinScreen() {
   </div>`;
 }
 
-export function lobbyScreen({ code, isHost, foeConnected }) {
+export function lobbyScreen({ code, isHost, foeConnected, mode = "classic" }) {
+  const modePicker = `
+      <div class="section-title">Game mode</div>
+      <div class="mode-grid">
+        ${MODE_ORDER.map(
+          (k) => `
+          <button class="mode-chip ${k === mode ? "active" : ""}" data-mode="${k}" ${
+            isHost ? "" : "disabled"
+          }>
+            <span class="mode-name">${MODES[k].label}</span>
+            <span class="mode-desc">${MODES[k].desc}</span>
+          </button>`
+        ).join("")}
+      </div>
+      ${isHost ? "" : `<div class="hint">Host picks the mode.</div>`}`;
+
   return `
   <div class="screen">
     ${brand()}
@@ -75,6 +103,8 @@ export function lobbyScreen({ code, isHost, foeConnected }) {
         <span class="code">${code || "······"}</span>
         <button class="btn" id="copyBtn">Copy</button>
       </div>
+
+      ${modePicker}
 
       <div class="players">
         <div class="player-chip you">
@@ -130,7 +160,10 @@ function renderText(text) {
   return html;
 }
 
-export function raceScreen({ text, solo }) {
+export function raceScreen({ text, solo, mode = "classic", timeLimit = 0 }) {
+  const timerStat = timeLimit
+    ? `<div class="stat"><div class="val" id="leftVal">${timeLimit}</div><div class="lbl">seconds left</div></div>`
+    : "";
   return `
   <div class="screen">
     <div class="race-top">
@@ -153,6 +186,7 @@ export function raceScreen({ text, solo }) {
         <div class="stat"><div class="val" id="wpmVal">0</div><div class="lbl">wpm</div></div>
         <div class="stat"><div class="val" id="accVal">100</div><div class="lbl">accuracy %</div></div>
         <div class="stat"><div class="val" id="timeVal">0.0</div><div class="lbl">seconds</div></div>
+        ${timerStat}
       </div>
       <div class="words-viewport">
         <div class="words" id="words">${renderText(text)}</div>
@@ -164,7 +198,41 @@ export function raceScreen({ text, solo }) {
   </div>`;
 }
 
-export function resultScreen({ outcome, solo, you, foe }) {
+// Falling-words head-to-head screen. Each player sees only their own field;
+// progress bars up top compare live scores. `solo` hides the opponent bar.
+export function fallingScreen({ solo }) {
+  return `
+  <div class="screen">
+    <div class="race-top">
+      <div class="progress-track you glass">
+        <div class="ph"><span class="who">You</span><span class="metric" id="youMetric">0 cleared</span></div>
+        <div class="bar"><div class="fill" id="youFill"></div></div>
+      </div>
+      ${
+        solo
+          ? ""
+          : `<div class="progress-track foe glass">
+        <div class="ph"><span class="who">Opponent</span><span class="metric" id="foeMetric">0 cleared</span></div>
+        <div class="bar"><div class="fill" id="foeFill"></div></div>
+      </div>`
+      }
+    </div>
+
+    <div class="type-stage glass">
+      <div class="hud">
+        <div class="stat"><div class="val" id="scoreVal">0</div><div class="lbl">cleared</div></div>
+        <div class="stat"><div class="val" id="livesVal">3</div><div class="lbl">lives</div></div>
+      </div>
+      <div class="fall-field" id="fallField"></div>
+      <input class="hidden-input" id="hiddenInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+      <div class="countdown" id="countdown"><div class="num">3</div></div>
+    </div>
+    <div class="fall-typed" id="fallTyped"></div>
+    <div class="hint">Type any falling word and press it out — clear it before it lands.</div>
+  </div>`;
+}
+
+export function resultScreen({ outcome, solo, you, foe, mode = "classic" }) {
   // outcome: "solo" | "win" | "lose" | "draw"
   const titleMap = {
     solo: "Warm-up complete",
@@ -183,15 +251,20 @@ export function resultScreen({ outcome, solo, you, foe }) {
   const heroClass = classMap[outcome];
   const heroIcon = iconMap[outcome];
 
+  // Falling-words is scored by words cleared, not wpm/acc/time.
+  const statCells = (p) =>
+    mode === "falling"
+      ? `<div><div class="val">${p.cleared ?? 0}</div><div class="lbl">cleared</div></div>
+         <div><div class="val">${p.wpm ?? 0}</div><div class="lbl">wpm</div></div>`
+      : `<div><div class="val">${p.wpm}</div><div class="lbl">wpm</div></div>
+         <div><div class="val">${p.acc}%</div><div class="lbl">acc</div></div>
+         <div><div class="val">${p.time}s</div><div class="lbl">time</div></div>`;
+
   const foeCard = solo
     ? ""
     : `<div class="result-card foe glass">
         <div class="rc-head">${icon.foe}<span>Opponent</span></div>
-        <div class="rc-stats">
-          <div><div class="val">${foe.wpm}</div><div class="lbl">wpm</div></div>
-          <div><div class="val">${foe.acc}%</div><div class="lbl">acc</div></div>
-          <div><div class="val">${foe.time}s</div><div class="lbl">time</div></div>
-        </div>
+        <div class="rc-stats">${statCells(foe)}</div>
       </div>`;
 
   return `
@@ -203,11 +276,7 @@ export function resultScreen({ outcome, solo, you, foe }) {
     <div class="result-grid" style="${solo ? "grid-template-columns:1fr" : ""}">
       <div class="result-card you glass">
         <div class="rc-head">${icon.you}<span>You</span></div>
-        <div class="rc-stats">
-          <div><div class="val">${you.wpm}</div><div class="lbl">wpm</div></div>
-          <div><div class="val">${you.acc}%</div><div class="lbl">acc</div></div>
-          <div><div class="val">${you.time}s</div><div class="lbl">time</div></div>
-        </div>
+        <div class="rc-stats">${statCells(you)}</div>
       </div>
       ${foeCard}
     </div>

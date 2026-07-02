@@ -782,4 +782,120 @@ svg {
   .brand h1 {
     font-size: 24px;
   }
+  .fall-field {
+    height: 300px;
+  }
+}
+
+/* ---------- network warning ---------- */
+.net-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: -6px auto 20px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+.net-info {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--stroke);
+  background: var(--glass);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.net-info:hover {
+  color: var(--text);
+  border-color: var(--accent-2);
+}
+
+/* ---------- mode picker (lobby) ---------- */
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 10px 0 20px;
+}
+.mode-chip {
+  text-align: left;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--stroke);
+  background: var(--glass);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.mode-chip:hover:not(:disabled) {
+  border-color: var(--accent-2);
+}
+.mode-chip:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+.mode-chip.active {
+  border-color: var(--accent);
+  background: var(--glass-strong);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.mode-chip .mode-name {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+.mode-chip .mode-desc {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+/* ---------- falling words ---------- */
+.fall-field {
+  position: relative;
+  height: 360px;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--stroke);
+  margin-bottom: 8px;
+}
+.fall-word {
+  position: absolute;
+  top: 0;
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--glass-strong);
+  border: 1px solid var(--stroke);
+  white-space: nowrap;
+  will-change: transform;
+}
+.fall-word.match {
+  color: var(--accent-2);
+  border-color: var(--accent-2);
+  box-shadow: 0 0 12px rgba(33, 212, 253, 0.35);
+}
+.fall-word.cleared {
+  color: var(--good);
+  border-color: var(--good);
+  transform: scale(1.15);
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.fall-typed {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 20px;
+  letter-spacing: 2px;
+  min-height: 26px;
+  color: var(--accent-2);
 }

@@ -6,11 +6,23 @@ import {
   lobbyScreen,
   raceScreen,
   resultScreen,
+  fallingScreen,
   toast,
+  MODES,
 } from "./ui.js";
 import { generate, makeSeed } from "./words.js";
 import { createRace } from "./race.js";
+import { createFalling } from "./falling.js";
 import { createNet } from "./net.js";
+
+// Per-mode config. `words` is how many words to generate for the shared text;
+// `timeLimit` (seconds) drives sprint; `hardMode` is accuracy sudden-death.
+const MODE_CONFIG = {
+  classic: { words: 40, timeLimit: 0, hardMode: false },
+  sprint: { words: 200, timeLimit: 30, hardMode: false },
+  accuracy: { words: 60, timeLimit: 0, hardMode: true },
+  falling: { words: 0, timeLimit: 0, hardMode: false },
+};
 
 // ---------------------------------------------------------------------------
 // TypeDuel — real-time 1v1 typing race.
@@ -18,13 +30,12 @@ import { createNet } from "./net.js";
 //  - Multiplayer: WebRTC P2P via PeerJS. Host shares a code; guest joins.
 // ---------------------------------------------------------------------------
 
-const WORD_COUNT = 40;
-
 const state = {
   seed: null,
   text: "",
   isHost: false,
   solo: false,
+  mode: "classic",
   code: null,
   net: null,
   race: null,
@@ -64,11 +75,18 @@ function goHome() {
   teardownNet();
   if (state.race) state.race.destroy();
   state.solo = false;
+  state.mode = "classic";
   resetRoundState();
   render(homeScreen());
   el("createCard").onclick = goCreate;
   el("joinCard").onclick = goJoin;
   el("soloBtn").onclick = () => startRace({ solo: true });
+  const info = el("netInfoBtn");
+  if (info)
+    info.onclick = () =>
+      toast(
+        "Multiplayer connects browsers directly (P2P). Some strict/corporate networks block this — try another network if it fails."
+      );
 }
 
 // ---------------- Create (host) ----------------
@@ -137,13 +155,25 @@ function wireNetHandlers() {
   net.onMessage((msg) => {
     switch (msg.type) {
       case "ready":
-        if (state.isHost) renderLobby(state.code, true);
+        if (state.isHost) {
+          renderLobby(state.code, true);
+          // Tell the freshly-joined guest which mode is currently selected.
+          state.net.send({ type: "mode", mode: state.mode });
+        }
+        break;
+      case "mode":
+        // Host changed the mode; guest updates its lobby to match.
+        if (!state.isHost && MODES[msg.mode]) {
+          state.mode = msg.mode;
+          if (state.code) renderLobby(state.code, true);
+        }
         break;
       case "start":
-        // Guest receives the shared seed and begins.
+        // Guest receives the shared seed + mode and begins.
         resetRoundState();
+        state.mode = MODES[msg.mode] ? msg.mode : "classic";
         state.seed = msg.seed;
-        state.text = generate(msg.seed, msg.count);
+        state.text = state.mode === "falling" ? "" : generate(msg.seed, msg.count);
         launchRace({ solo: false });
         break;
       case "progress":
@@ -151,15 +181,20 @@ function wireNetHandlers() {
         // Safety net: if the explicit finish message is ever lost, a progress
         // report of 100% still lets us know the opponent has completed.
         if (msg.progress >= 1 && !state.foeDone) {
-          state.foe = state.foe || { wpm: msg.wpm, acc: 100, time: "—" };
+          state.foe = state.foe || { wpm: msg.wpm, acc: 100, time: "—", cleared: msg.cleared };
           state.foeDone = true;
           maybeShowResult();
         }
         break;
       case "finish":
-        state.foe = { wpm: msg.wpm, acc: msg.acc, time: msg.time };
+        state.foe = {
+          wpm: msg.wpm,
+          acc: msg.acc,
+          time: msg.time,
+          cleared: msg.cleared,
+        };
         state.foeDone = true;
-        updateFoe(1, msg.wpm);
+        updateFoe(1, msg.wpm, msg.cleared);
         maybeShowResult();
         break;
       case "rematch":
@@ -174,7 +209,7 @@ function wireNetHandlers() {
     // If mid-race, end it; otherwise drop back to home.
     if (state.race) {
       state.foeDone = true;
-      state.foe = state.foe || { wpm: 0, acc: 100, time: "—" };
+      state.foe = state.foe || { wpm: 0, acc: 100, time: "—", cleared: 0 };
       maybeShowResult();
     }
   });
@@ -183,7 +218,9 @@ function wireNetHandlers() {
 }
 
 function renderLobby(code, foeConnected) {
-  render(lobbyScreen({ code, isHost: state.isHost, foeConnected }));
+  render(
+    lobbyScreen({ code, isHost: state.isHost, foeConnected, mode: state.mode })
+  );
   el("leaveBtn").onclick = goHome;
   const copy = el("copyBtn");
   if (copy)
@@ -193,6 +230,19 @@ function renderLobby(code, foeConnected) {
     };
   const startBtn = el("startBtn");
   if (startBtn) startBtn.onclick = () => startRace({ solo: false });
+
+  // Host-only mode picker: selecting a chip updates state and notifies the guest.
+  if (state.isHost) {
+    document.querySelectorAll(".mode-chip").forEach((chip) => {
+      chip.onclick = () => {
+        const m = chip.dataset.mode;
+        if (!MODES[m] || m === state.mode) return;
+        state.mode = m;
+        state.net && state.net.send({ type: "mode", mode: m });
+        renderLobby(code, foeConnected);
+      };
+    });
+  }
 }
 
 // ---------------- Race orchestration ----------------
@@ -201,18 +251,33 @@ function startRace({ solo }) {
   clearBot();
   resetRoundState();
   state.solo = solo;
+  if (solo) state.mode = "classic"; // solo warm-up is always the classic race
+  const cfg = MODE_CONFIG[state.mode] || MODE_CONFIG.classic;
   state.seed = makeSeed();
-  state.text = generate(state.seed, solo ? 30 : WORD_COUNT);
+  state.text =
+    state.mode === "falling"
+      ? ""
+      : generate(state.seed, solo ? 30 : cfg.words);
 
   if (!solo && state.net) {
-    state.net.send({ type: "start", seed: state.seed, count: WORD_COUNT });
+    state.net.send({
+      type: "start",
+      seed: state.seed,
+      count: cfg.words,
+      mode: state.mode,
+    });
   }
   launchRace({ solo });
 }
 
-// Renders the race screen and runs the countdown + typing engine.
+// Renders the right screen for the mode and runs the countdown, then the engine.
 function launchRace({ solo }) {
-  render(raceScreen({ text: state.text, solo }));
+  const cfg = MODE_CONFIG[state.mode] || MODE_CONFIG.classic;
+  if (state.mode === "falling") {
+    render(fallingScreen({ solo }));
+  } else {
+    render(raceScreen({ text: state.text, solo, mode: state.mode, timeLimit: cfg.timeLimit }));
+  }
 
   const cd = el("countdown");
   let n = 3;
@@ -222,7 +287,8 @@ function launchRace({ solo }) {
     if (n <= 0) {
       clearInterval(iv);
       cd.style.display = "none";
-      beginTyping();
+      if (state.mode === "falling") beginFalling();
+      else beginTyping();
     } else {
       const num = cd.querySelector(".num");
       num.textContent = n;
@@ -233,37 +299,47 @@ function launchRace({ solo }) {
   }, 1000);
 }
 
+// Broadcast local progress to the opponent, throttled to ~10/s.
+function makeProgressSender() {
+  let lastSent = 0;
+  return (payload) => {
+    if (state.solo || !state.net) return;
+    const now = performance.now();
+    if (now - lastSent > 100) {
+      lastSent = now;
+      state.net.send({ type: "progress", ...payload });
+    }
+  };
+}
+
 function beginTyping() {
   const wordsEl = el("words");
   const hidden = el("hiddenInput");
-  let lastSent = 0;
+  const cfg = MODE_CONFIG[state.mode] || MODE_CONFIG.classic;
+  const sendProgress = makeProgressSender();
 
   state.race = createRace({
     text: state.text,
     wordsEl,
     hiddenInput: hidden,
+    timeLimit: cfg.timeLimit,
+    hardMode: cfg.hardMode,
     onProgress: (m) => {
       el("wpmVal").textContent = m.wpm;
       el("accVal").textContent = m.acc;
       el("timeVal").textContent = m.time;
+      const leftEl = el("leftVal");
+      if (leftEl && m.remaining != null) leftEl.textContent = Math.ceil(m.remaining);
       el("youMetric").textContent = `${m.wpm} wpm`;
       el("youFill").style.width = `${Math.min(m.progress * 100, 100)}%`;
-
-      // Throttle progress broadcasts to ~10/s.
-      if (!state.solo && state.net) {
-        const now = performance.now();
-        if (now - lastSent > 100) {
-          lastSent = now;
-          state.net.send({ type: "progress", progress: m.progress, wpm: m.wpm });
-        }
-      }
+      sendProgress({ progress: m.progress, wpm: m.wpm });
     },
     onFinish: (m) => {
       state.you = { wpm: m.wpm, acc: m.acc, time: m.time };
       state.youDone = true;
       if (!state.solo && state.net) {
-        // Send a guaranteed final 100% progress (so the opponent's safety net
-        // fires even if the finish packet is delayed), then the finish payload.
+        // Guaranteed final 100% progress (so the opponent's safety net fires
+        // even if the finish packet is delayed), then the finish payload.
         state.net.send({ type: "progress", progress: 1, wpm: m.wpm });
         state.net.send({ type: "finish", wpm: m.wpm, acc: m.acc, time: m.time });
       }
@@ -273,11 +349,43 @@ function beginTyping() {
   state.race.start();
 }
 
-function updateFoe(progress, wpm) {
+function beginFalling() {
+  const fieldEl = el("fallField");
+  const hidden = el("hiddenInput");
+  const typedEl = el("fallTyped");
+  const sendProgress = makeProgressSender();
+
+  state.race = createFalling({
+    seed: state.seed,
+    fieldEl,
+    hiddenInput: hidden,
+    typedEl,
+    onProgress: (m) => {
+      el("youMetric").textContent = `${m.cleared} cleared`;
+      el("youFill").style.width = `${Math.min(m.progress * 100, 100)}%`;
+      sendProgress({ progress: m.progress, wpm: m.wpm, cleared: m.cleared });
+    },
+    onFinish: (m) => {
+      state.you = { wpm: m.wpm, acc: 100, time: "—", cleared: m.cleared };
+      state.youDone = true;
+      if (!state.solo && state.net) {
+        state.net.send({ type: "progress", progress: 1, wpm: m.wpm, cleared: m.cleared });
+        state.net.send({ type: "finish", wpm: m.wpm, acc: 100, time: "—", cleared: m.cleared });
+      }
+      maybeShowResult();
+    },
+  });
+  state.race.start();
+}
+
+function updateFoe(progress, wpm, cleared) {
   const fill = el("foeFill");
   const metric = el("foeMetric");
   if (fill) fill.style.width = `${Math.min(progress * 100, 100)}%`;
-  if (metric && wpm != null) metric.textContent = `${wpm} wpm`;
+  if (metric) {
+    if (state.mode === "falling" && cleared != null) metric.textContent = `${cleared} cleared`;
+    else if (wpm != null) metric.textContent = `${wpm} wpm`;
+  }
 }
 
 // ---------------- Results ----------------
@@ -314,30 +422,44 @@ function showWaiting() {
 
 // Returns "win" | "lose" | "draw" from this peer's perspective.
 // Uses the same rules on both machines, so results always agree.
+//
+// Ranked by WPM first (net WPM counts correct chars only, see race.js metrics),
+// so mashing random keys to "finish" fast scores ~0 WPM and loses — this closes
+// the old exploit where lowest raw time won regardless of accuracy.
 function decideOutcome(you, foe) {
+  // Falling-words is scored by words cleared; more cleared wins, tie -> wpm.
+  if (state.mode === "falling") {
+    const yc = you.cleared ?? 0;
+    const fc = foe.cleared ?? 0;
+    if (yc !== fc) return yc > fc ? "win" : "lose";
+    if (you.wpm !== foe.wpm) return you.wpm > foe.wpm ? "win" : "lose";
+    return "draw";
+  }
+  // 1) Higher WPM wins.
+  if (you.wpm !== foe.wpm) return you.wpm > foe.wpm ? "win" : "lose";
+  // 2) Tie on WPM -> higher accuracy wins.
+  if (you.acc !== foe.acc) return you.acc > foe.acc ? "win" : "lose";
+  // 3) Still tied -> lower time wins.
   const yt = parseFloat(you.time);
   const ft = parseFloat(foe.time);
   const yTime = isNaN(yt) ? Infinity : yt;
   const fTime = isNaN(ft) ? Infinity : ft;
   if (yTime !== fTime) return yTime < fTime ? "win" : "lose";
-  // Tie on time -> higher WPM wins.
-  if (you.wpm !== foe.wpm) return you.wpm > foe.wpm ? "win" : "lose";
-  // Still tied -> higher accuracy wins.
-  if (you.acc !== foe.acc) return you.acc > foe.acc ? "win" : "lose";
+  // 4) Dead even.
   return "draw";
 }
 
 function showResult() {
   if (state.race) state.race.destroy();
-  const you = state.you || { wpm: 0, acc: 100, time: "0.0" };
-  const foe = state.foe || { wpm: 0, acc: 100, time: "0.0" };
+  const you = state.you || { wpm: 0, acc: 100, time: "0.0", cleared: 0 };
+  const foe = state.foe || { wpm: 0, acc: 100, time: "0.0", cleared: 0 };
 
   // Decide the outcome symmetrically so both peers agree.
-  // Lower time wins; on a tie fall back to higher WPM, then higher accuracy.
-  // (Time is reported at 0.1s precision, so ties are common and must be broken.)
+  // Higher WPM wins; on a tie fall back to higher accuracy, then lower time.
+  // (Falling mode ranks by words cleared — see decideOutcome.)
   const outcome = state.solo ? "solo" : decideOutcome(you, foe);
 
-  render(resultScreen({ outcome, solo: state.solo, you, foe }));
+  render(resultScreen({ outcome, solo: state.solo, you, foe, mode: state.mode }));
   el("homeBtn").onclick = goHome;
   const rematch = el("rematchBtn");
   rematch.onclick = () => {

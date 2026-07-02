@@ -32,11 +32,16 @@ export function makeSeed() {
   return (Math.floor(Math.random() * 0xffffffff) >>> 0);
 }
 
-export function generate(seed, count = 40) {
+// Deterministic array of words for a given seed (same on both peers).
+export function generateWords(seed, count = 40) {
   const rand = mulberry32(seed);
   const out = [];
   for (let i = 0; i < count; i++) {
     out.push(BANK[Math.floor(rand() * BANK.length)]);
   }
-  return out.join(" ");
+  return out;
+}
+
+export function generate(seed, count = 40) {
+  return generateWords(seed, count).join(" ");
 }

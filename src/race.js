@@ -1,6 +1,14 @@
 // Typing engine: tracks input, computes WPM/accuracy/progress, fires callbacks.
 
-export function createRace({ text, wordsEl, hiddenInput, onProgress, onFinish }) {
+export function createRace({
+  text,
+  wordsEl,
+  hiddenInput,
+  onProgress,
+  onFinish,
+  timeLimit = 0, // seconds; 0 = no limit (sprint mode uses this)
+  hardMode = false, // sudden death: first wrong char ends the run (accuracy mode)
+}) {
   const chars = [...wordsEl.querySelectorAll(".ch")];
   let idx = 0;
   let typed = 0;
@@ -39,12 +47,20 @@ export function createRace({ text, wordsEl, hiddenInput, onProgress, onFinish })
     const minutes = Math.max(elapsedMs / 60000, 1e-6);
     const wpm = Math.round(correct / 5 / minutes) || 0;
     const acc = typed ? Math.round((correct / typed) * 100) : 100;
-    return { wpm, acc, time: (elapsedMs / 1000).toFixed(1), progress: idx / text.length };
+    const m = { wpm, acc, time: (elapsedMs / 1000).toFixed(1), progress: idx / text.length };
+    // Time-limited (sprint) mode: report seconds remaining so the UI can count down.
+    if (timeLimit) m.remaining = Math.max(0, timeLimit - elapsedMs / 1000);
+    return m;
   }
 
   function tick() {
     if (finished) return;
     onProgress(metrics());
+    // Sprint mode ends when the clock runs out.
+    if (timeLimit && startTime && performance.now() - startTime >= timeLimit * 1000) {
+      finish();
+      return;
+    }
     raf = requestAnimationFrame(tick);
   }
 
@@ -78,6 +94,13 @@ export function createRace({ text, wordsEl, hiddenInput, onProgress, onFinish })
     } else {
       chars[idx].classList.add("incorrect");
       chars[idx].classList.remove("correct");
+      // Accuracy challenge: a single mistake ends the run immediately.
+      if (hardMode) {
+        idx++;
+        setCurrent();
+        finish();
+        return;
+      }
     }
     idx++;
     setCurrent();
