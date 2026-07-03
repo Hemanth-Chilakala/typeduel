@@ -138,6 +138,31 @@ export function lobbyScreen({ code, isHost, foeConnected, mode = "classic" }) {
   </div>`;
 }
 
+// Solo mode picker: choose any of the game modes, then race offline.
+// Reuses the lobby's mode-chip markup/styles; here every chip is enabled.
+export function soloScreen({ mode = "classic" }) {
+  return `
+  <div class="screen">
+    ${brand()}
+    <div class="glass pad">
+      <div class="section-title">Choose a mode</div>
+      <div class="mode-grid">
+        ${MODE_ORDER.map(
+          (k) => `
+          <button class="mode-chip ${k === mode ? "active" : ""}" data-mode="${k}">
+            <span class="mode-name">${MODES[k].label}</span>
+            <span class="mode-desc">${MODES[k].desc}</span>
+          </button>`
+        ).join("")}
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost" id="soloBackBtn">Back</button>
+        <button class="btn btn-primary" id="soloStartBtn">Start</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 // Build word-grouped markup so text wraps by word across lines,
 // while keeping a continuous character index for the typing engine.
 function renderText(text) {

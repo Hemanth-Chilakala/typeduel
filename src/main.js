@@ -7,6 +7,7 @@ import {
   raceScreen,
   resultScreen,
   fallingScreen,
+  soloScreen,
   toast,
   MODES,
 } from "./ui.js";
@@ -80,13 +81,38 @@ function goHome() {
   render(homeScreen());
   el("createCard").onclick = goCreate;
   el("joinCard").onclick = goJoin;
-  el("soloBtn").onclick = () => startRace({ solo: true });
+  el("soloBtn").onclick = goSolo;
   const info = el("netInfoBtn");
   if (info)
     info.onclick = () =>
       toast(
         "Multiplayer connects browsers directly (P2P). Some strict/corporate networks block this — try another network if it fails."
       );
+}
+
+// ---------------- Solo (mode picker) ----------------
+// Solo can play any of the game modes multiplayer offers. Pick a mode, then race
+// offline — no network, no opponent.
+function goSolo() {
+  clearBot();
+  teardownNet();
+  if (state.race) state.race.destroy();
+  state.solo = true;
+  renderSolo();
+}
+
+function renderSolo() {
+  render(soloScreen({ mode: state.mode }));
+  el("soloBackBtn").onclick = goHome;
+  el("soloStartBtn").onclick = () => startRace({ solo: true });
+  document.querySelectorAll(".mode-chip").forEach((chip) => {
+    chip.onclick = () => {
+      const m = chip.dataset.mode;
+      if (!MODES[m] || m === state.mode) return;
+      state.mode = m;
+      renderSolo();
+    };
+  });
 }
 
 // ---------------- Create (host) ----------------
@@ -181,7 +207,7 @@ function wireNetHandlers() {
         // Safety net: if the explicit finish message is ever lost, a progress
         // report of 100% still lets us know the opponent has completed.
         if (msg.progress >= 1 && !state.foeDone) {
-          state.foe = state.foe || { wpm: msg.wpm, acc: 100, time: "—", cleared: msg.cleared };
+          state.foe = state.foe || { wpm: msg.wpm, acc: msg.acc ?? 100, time: "—", cleared: msg.cleared };
           state.foeDone = true;
           maybeShowResult();
         }
@@ -251,13 +277,9 @@ function startRace({ solo }) {
   clearBot();
   resetRoundState();
   state.solo = solo;
-  if (solo) state.mode = "classic"; // solo warm-up is always the classic race
   const cfg = MODE_CONFIG[state.mode] || MODE_CONFIG.classic;
   state.seed = makeSeed();
-  state.text =
-    state.mode === "falling"
-      ? ""
-      : generate(state.seed, solo ? 30 : cfg.words);
+  state.text = state.mode === "falling" ? "" : generate(state.seed, cfg.words);
 
   if (!solo && state.net) {
     state.net.send({
@@ -340,7 +362,7 @@ function beginTyping() {
       if (!state.solo && state.net) {
         // Guaranteed final 100% progress (so the opponent's safety net fires
         // even if the finish packet is delayed), then the finish payload.
-        state.net.send({ type: "progress", progress: 1, wpm: m.wpm });
+        state.net.send({ type: "progress", progress: 1, wpm: m.wpm, acc: m.acc });
         state.net.send({ type: "finish", wpm: m.wpm, acc: m.acc, time: m.time });
       }
       maybeShowResult();

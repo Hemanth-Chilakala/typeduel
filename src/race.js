@@ -75,6 +75,10 @@ export function createRace({
       if (idx > 0) {
         idx--;
         const c = chars[idx];
+        // Undo this keystroke's contribution to the metrics, otherwise
+        // corrected characters stay counted and inflate WPM/accuracy.
+        if (c.classList.contains("correct")) correct--;
+        typed--;
         c.classList.remove("correct", "incorrect");
       }
       setCurrent();

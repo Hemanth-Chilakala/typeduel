@@ -23,7 +23,7 @@ There is no server holding the game state. The two browsers talk directly to eac
 - Head-to-head multiplayer with a shareable room code.
 - Multiple race modes the host can pick and sync to the guest: classic passage race, 30-second sprint, sudden-death accuracy, and falling-words survival.
 - Winner decided by net words-per-minute (correct characters only), so racing ahead with wrong keystrokes cannot beat an accurate finish.
-- Solo warm-up mode for offline practice.
+- Solo practice mode with a mode picker — play any of the four race modes offline, no connection required.
 - Live opponent progress, WPM, and accuracy.
 - Deterministic word generation so both players always get identical text.
 - Glassmorphic dark UI with animated background, custom caret, and per-character feedback.
@@ -89,7 +89,11 @@ windows (or two devices on the same network using the Network URL that Vite prin
 3. Once the opponent shows as connected, the host clicks **Start Race**.
 4. Both players type the same passage. First to finish wins. Use **Rematch** to play again.
 
-Solo warm-up is available from the home screen and needs no connection.
+## Playing solo
+
+Click **Try a solo warm-up** on the home screen, choose any of the four modes
+(classic, sprint, accuracy, or falling words), and press **Start**. Solo needs no
+connection and no opponent — use **Go again** on the results screen to replay.
 
 ## Deployment (GitHub Pages, free)
 
